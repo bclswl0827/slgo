@@ -96,6 +96,6 @@ type SeedLinkProvider interface {
 
 // Consumer interface for SeedLink server to stream data
 type SeedLinkConsumer interface {
-	Subscribe(clientId string, eventHandler func(SeedLinkDataPacket)) error
+	Subscribe(clientId string, channels []string, eventHandler func(SeedLinkDataPacket)) error
 	Unsubscribe(clientId string) error
 }

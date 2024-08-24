@@ -10,7 +10,7 @@ import (
 
 type INFO struct{}
 
-// Callback of "INFO <...>" command, implements SeedLinkCommandCallback interface
+// Callback of "INFO <...>" command, implements handler interface
 func (i *INFO) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	err := fmt.Errorf("arg error")
 	if len(args) < 1 {
@@ -41,7 +41,7 @@ func (i *INFO) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 	return err
 }
 
-// Fallback of "INFO <...>" command, implements SeedLinkCommandCallback interface
+// Fallback of "INFO <...>" command, implements handler interface
 func (i *INFO) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Write([]byte(RES_ERR))
 }

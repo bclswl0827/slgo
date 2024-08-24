@@ -2,7 +2,7 @@ package handlers
 
 type SELECT struct{}
 
-// Callback of "SELECT <...>" command, implements SeedLinkCommandCallback interface
+// Callback of "SELECT <...>" command, implements handler interface
 func (*SELECT) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	if len(args) < 1 {
 		_, err := client.Write([]byte(RES_ERR))
@@ -20,7 +20,7 @@ func (*SELECT) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 	return err
 }
 
-// Fallback of "SELECT <...>" command, implements SeedLinkCommandCallback interface
+// Fallback of "SELECT <...>" command, implements handler interface
 func (*SELECT) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Close()
 }

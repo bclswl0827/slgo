@@ -2,7 +2,7 @@ package handlers
 
 type STATION struct{}
 
-// Callback of "STATION <...> <...>" command, implements SeedLinkCommandCallback interface
+// Callback of "STATION <...> <...>" command, implements handler interface
 func (s *STATION) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	client.Station = s.truncate(args[0], 5)
 	client.Network = s.truncate(args[1], 2)
@@ -10,7 +10,7 @@ func (s *STATION) Callback(client *SeedLinkClient, provider SeedLinkProvider, co
 	return err
 }
 
-// Fallback of "STATION <...> <...>" command, implements SeedLinkCommandCallback interface
+// Fallback of "STATION <...> <...>" command, implements handler interface
 func (*STATION) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Close()
 }

@@ -4,7 +4,7 @@ import "errors"
 
 type END struct{}
 
-// Callback of "END" command, implements SeedLinkCommandCallback interface
+// Callback of "END" command, implements handler interface
 func (*END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	if client.StartTime.IsZero() {
 		client.Write([]byte(RES_ERR))
@@ -26,16 +26,20 @@ func (*END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer
 
 	// Subscribe to the message queue
 	client.Streaming = true
-	return consumer.Subscribe(client.RemoteAddr().String(), func(data SeedLinkDataPacket) {
-		err := SendSeedLinkPacket(client, data)
-		if err != nil {
-			consumer.Unsubscribe(client.RemoteAddr().String())
-			client.Close()
-		}
-	})
+	return consumer.Subscribe(
+		client.RemoteAddr().String(),
+		client.Channels,
+		func(data SeedLinkDataPacket) {
+			err := SendSeedLinkPacket(client, data)
+			if err != nil {
+				consumer.Unsubscribe(client.RemoteAddr().String())
+				client.Close()
+			}
+		},
+	)
 }
 
-// Fallback of "END" command, implements SeedLinkCommandCallback interface
+// Fallback of "END" command, implements handler interface
 func (*END) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Close()
 }

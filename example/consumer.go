@@ -8,7 +8,7 @@ import (
 
 type consumer struct{}
 
-func (c *consumer) Subscribe(clientId string, eventHandler func(handlers.SeedLinkDataPacket)) error {
+func (c *consumer) Subscribe(clientId string, channels []string, eventHandler func(handlers.SeedLinkDataPacket)) error {
 	return nil
 }
 

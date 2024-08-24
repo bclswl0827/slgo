@@ -8,7 +8,7 @@ import (
 
 type TIME struct{}
 
-// Callback of "TIME <...>" command, implements SeedLinkCommandCallback interface
+// Callback of "TIME <...>" command, implements handler interface
 func (t *TIME) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	resCode := RES_OK
 	switch len(args) {
@@ -35,7 +35,7 @@ func (t *TIME) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 	return err
 }
 
-// Fallback of "TIME <...>" command, implements SeedLinkCommandCallback interface
+// Fallback of "TIME <...>" command, implements handler interface
 func (*TIME) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Close()
 }

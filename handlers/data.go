@@ -4,7 +4,7 @@ import "strconv"
 
 type DATA struct{}
 
-// Callback of "DATA" command, implements SeedLinkCommandCallback interface
+// Callback of "DATA" command, implements handler interface
 func (*DATA) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	client.StartTime = provider.GetCurrentTime()
 	if len(args) > 0 {
@@ -19,7 +19,7 @@ func (*DATA) Callback(client *SeedLinkClient, provider SeedLinkProvider, consume
 	return err
 }
 
-// Fallback of "DATA" command, implements SeedLinkCommandCallback interface
+// Fallback of "DATA" command, implements handler interface
 func (*DATA) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) {
 	client.Close()
 }
