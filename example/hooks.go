@@ -13,7 +13,7 @@ func (h *hooks) OnConnection(client *handlers.SeedLinkClient) {
 }
 
 func (h *hooks) OnData(client *handlers.SeedLinkClient, data []byte) {
-	log.Printf("client %v sent data %v", client.RemoteAddr(), data)
+	log.Printf("%d bytes sent to client %v", len(data), client.RemoteAddr())
 }
 
 func (h *hooks) OnClose(client *handlers.SeedLinkClient) {

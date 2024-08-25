@@ -6,20 +6,16 @@ import (
 	"github.com/bclswl0827/slgo/handlers"
 )
 
-var currentTime time.Time
-
-func init() {
-	currentTime = time.Now().UTC()
+type provider struct {
+	startTime time.Time
 }
-
-type provider struct{}
 
 func (p *provider) GetSoftware() string {
 	return "slgo"
 }
 
 func (p *provider) GetStartTime() time.Time {
-	return currentTime
+	return p.startTime
 }
 
 func (p *provider) GetCurrentTime() time.Time {
@@ -50,7 +46,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			SeedName:  "EHZ",
 			Location:  "00",
 			Type:      "D",
-			Station:   "SHAKE",
+			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
 			BeginTime: p.GetStartTime().Format("2006-01-02 15:04:01"),
@@ -58,7 +54,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			SeedName:  "EHE",
 			Location:  "00",
 			Type:      "D",
-			Station:   "SHAKE",
+			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
 			BeginTime: p.GetStartTime().Format("2006-01-02 15:04:01"),
@@ -66,7 +62,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			SeedName:  "EHN",
 			Location:  "00",
 			Type:      "D",
-			Station:   "SHAKE",
+			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 	}
 }
@@ -81,5 +77,21 @@ func (p *provider) GetCapabilities() []handlers.SeedLinkCapability {
 }
 
 func (p *provider) QueryHistory(startTime, endTime time.Time, channels []string) ([]handlers.SeedLinkDataPacket, error) {
-	return []handlers.SeedLinkDataPacket{}, nil
+	var dataPackets []handlers.SeedLinkDataPacket
+
+	// Generate random data packets for each channel, every second
+	startTimestamp, endTimestamp := startTime.UnixMilli(), endTime.UnixMilli()
+	for i := startTimestamp; i < endTimestamp; i += 1000 {
+		for _, channel := range channels {
+			dataPacket := handlers.SeedLinkDataPacket{
+				Timestamp:  i,
+				SampleRate: SAMPLE_RATE,
+				Channel:    channel,
+				DataArr:    generateRandomArray(SAMPLE_RATE, -32768, 32768),
+			}
+			dataPackets = append(dataPackets, dataPacket)
+		}
+	}
+
+	return dataPackets, nil
 }
