@@ -20,6 +20,7 @@ func (*END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer
 	for _, dataPacket := range historyRecords {
 		err = SendSeedLinkPacket(client, dataPacket)
 		if err != nil {
+			client.Write([]byte(RES_ERR))
 			return err
 		}
 	}
@@ -33,6 +34,7 @@ func (*END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer
 			err := SendSeedLinkPacket(client, data)
 			if err != nil {
 				consumer.Unsubscribe(client.RemoteAddr().String())
+				client.Write([]byte(RES_ERR))
 				client.Close()
 			}
 		},
