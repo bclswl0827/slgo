@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -41,12 +42,9 @@ func (*TIME) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consume
 }
 
 func (*TIME) getTimeFromArg(timeStr string) (time.Time, error) {
-	if len(timeStr) != 19 {
-		return time.Time{}, nil
-	}
 	splitTimeStr := strings.Split(timeStr, ",")
 	if len(splitTimeStr) != 6 {
-		return time.Time{}, nil
+		return time.Time{}, errors.New("time string must have 6 comma-separated values")
 	}
 
 	// Format:  YYYY,MM,DD,hh,mm,ss
