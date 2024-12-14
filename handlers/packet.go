@@ -7,7 +7,7 @@ import (
 	"github.com/bclswl0827/mseedio"
 )
 
-func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket) error {
+func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket, dataType int) error {
 	// Create data chunks to adapt to SeedLink packet size
 	var countGroup [][]int32
 	if len(data.DataArr) > CHUNK_SIZE {
@@ -26,7 +26,7 @@ func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket) error {
 	for i, c := range countGroup {
 		// Generate MiniSEED record
 		var miniseed mseedio.MiniSeedData
-		miniseed.Init(mseedio.STEIM2, mseedio.MSBFIRST)
+		miniseed.Init(dataType, mseedio.MSBFIRST)
 		err := miniseed.Append(c, &mseedio.AppendOptions{
 			ChannelCode:    data.Channel,
 			StationCode:    client.Station,

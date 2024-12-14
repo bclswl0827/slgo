@@ -46,7 +46,7 @@ func main() {
 		},
 		&hooks{},
 	)
-	err := server.Start(HOST, PORT)
+	err := server.Start(HOST, PORT, true)
 	if err != nil {
 		log.Fatalln(err)
 	}

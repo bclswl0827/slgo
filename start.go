@@ -4,19 +4,26 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/bclswl0827/mseedio"
 	"github.com/bclswl0827/slgo/handlers"
 )
 
-func (s *SeedLinkServer) Start(host string, port int) error {
+func (s *SeedLinkServer) Start(host string, port int, compress bool) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
 
+	// Set packet data type to INT32 or STEIM2
+	packetDataType := mseedio.INT32
+	if compress {
+		packetDataType = mseedio.STEIM2
+	}
+
 	// Builtin implementation of command handlers
 	commands := map[string]SeedLinkCommand{
-		"END":          {HasArgs: false, Handler: &handlers.END{}},
+		"END":          {HasArgs: false, Handler: &handlers.END{DataType: packetDataType}},
 		"DATA":         {HasArgs: true, Handler: &handlers.DATA{}},
 		"TIME":         {HasArgs: true, Handler: &handlers.TIME{}},
 		"INFO":         {HasArgs: true, Handler: &handlers.INFO{}},
