@@ -24,6 +24,7 @@ func (s *SeedLinkServer) Start(host string, port int, compress bool) error {
 	// Builtin implementation of command handlers
 	commands := map[string]SeedLinkCommand{
 		"END":          {HasArgs: false, Handler: &handlers.END{DataType: packetDataType}},
+		"BATCH":        {HasArgs: false, Handler: &handlers.BATCH{}},
 		"DATA":         {HasArgs: true, Handler: &handlers.DATA{}},
 		"TIME":         {HasArgs: true, Handler: &handlers.TIME{}},
 		"INFO":         {HasArgs: true, Handler: &handlers.INFO{}},

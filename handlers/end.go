@@ -1,6 +1,8 @@
 package handlers
 
-import "errors"
+import (
+	"errors"
+)
 
 type END struct {
 	DataType int

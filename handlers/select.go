@@ -1,21 +1,35 @@
 package handlers
 
+import (
+	"strings"
+)
+
 type SELECT struct{}
 
 // Callback of "SELECT <...>" command, implements handler interface
 func (*SELECT) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
-	if len(args) < 1 {
+	if len(args) == 0 {
 		_, err := client.Write([]byte(RES_ERR))
 		return err
-	} else {
-		if len(args[0]) < 5 {
-			_, err := client.Write([]byte(RES_ERR))
-			return err
-		} else {
-			client.Location = args[0][:2]
-			client.Channels = append(client.Channels, args[0][2:5])
-		}
 	}
+
+	locationAndChannel := args[0]
+	if len(locationAndChannel) < 5 {
+		_, err := client.Write([]byte(RES_ERR))
+		return err
+	}
+	if strings.Contains(locationAndChannel, ".") {
+		locationAndChannel = strings.Split(locationAndChannel, ".")[0]
+	}
+
+	if len(locationAndChannel) == 3 {
+		client.Location = "00"
+		client.Channels = append(client.Channels, locationAndChannel)
+	} else if len(locationAndChannel) == 5 {
+		client.Location = locationAndChannel[:2]
+		client.Channels = append(client.Channels, locationAndChannel[2:5])
+	}
+
 	_, err := client.Write([]byte(RES_OK))
 	return err
 }

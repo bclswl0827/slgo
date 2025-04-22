@@ -12,7 +12,7 @@ import (
 const CHUNK_SIZE = 100
 
 // SeedLink handshake constant flags
-const RELEASE = "SeedLink v3.1 AnyShake Edition (Basic implementation in Go, repository: https://github.com/bclswl0827/slgo) :: SLPROTO:3.1 CAP EXTREPLY NSWILDCARD BATCH WS:13 :: Constructing Realtime Seismic Network Ambitiously."
+const RELEASE = "SeedLink v3.1 AnyShake Edition (Basic implementation in Go, repository: https://github.com/bclswl0827/slgo) :: SLPROTO:3.1 CAP EXTREPLY NSWILDCARD BATCH WS:13"
 
 // SeedLink error flags
 const (

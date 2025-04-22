@@ -45,7 +45,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			EndTime:   "9999-12-31 23:59:59",
 			SeedName:  "EHZ",
 			Location:  "00",
-			Type:      "D",
+			Type:      "D",     // Always "D"
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
@@ -53,7 +53,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			EndTime:   "9999-12-31 23:59:59",
 			SeedName:  "EHE",
 			Location:  "00",
-			Type:      "D",
+			Type:      "D",     // Always "D"
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
@@ -61,7 +61,7 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 			EndTime:   "9999-12-31 23:59:59",
 			SeedName:  "EHN",
 			Location:  "00",
-			Type:      "D",
+			Type:      "D",     // Always "D"
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 	}
