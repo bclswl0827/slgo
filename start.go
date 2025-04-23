@@ -1,6 +1,7 @@
 package slgo
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/bclswl0827/slgo/handlers"
 )
 
-func (s *SeedLinkServer) Start(host string, port int, compress bool) error {
+func (s *SeedLinkServer) Start(ctx context.Context, host string, port int, compress bool) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return err
@@ -34,13 +35,29 @@ func (s *SeedLinkServer) Start(host string, port int, compress bool) error {
 		"CAPABILITIES": {HasArgs: true, Handler: &handlers.CAPABILITIES{}},
 	}
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			continue
-		}
+	done := make(chan struct{})
 
-		client := handlers.SeedLinkClient{Conn: conn}
-		go s.handleConnection(&client, commands)
-	}
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					close(done)
+					return
+				default:
+					continue
+				}
+			}
+
+			client := handlers.SeedLinkClient{Conn: conn}
+			go s.handleConnection(ctx, &client, commands)
+		}
+	}()
+
+	<-ctx.Done()
+	listener.Close()
+	<-done
+
+	return nil
 }

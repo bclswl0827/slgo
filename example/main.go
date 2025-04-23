@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/bclswl0827/slgo"
@@ -46,8 +50,15 @@ func main() {
 		},
 		&hooks{},
 	)
-	err := server.Start(HOST, PORT, true)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	defer ticker.Stop()
+
+	err := server.Start(ctx, HOST, PORT, true)
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	log.Println("SeedLink server stopped")
 }
