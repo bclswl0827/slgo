@@ -14,20 +14,23 @@ func (t *TIME) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 	resCode := RES_OK
 	switch len(args) {
 	case 2:
-		endTime, err := t.getTimeFromArg(args[1])
-		if err != nil {
-			resCode = RES_ERR
-		} else {
-			client.EndTime = endTime
-		}
-		fallthrough
-	case 1:
-		startTime, err := t.getTimeFromArg(args[0])
-		if err != nil {
+		if startTime, err := t.getTimeFromArg(args[0]); err != nil {
 			resCode = RES_ERR
 		} else {
 			client.StartTime = startTime
 		}
+		if endTime, err := t.getTimeFromArg(args[1]); err != nil {
+			resCode = RES_ERR
+		} else {
+			client.EndTime = endTime
+		}
+	case 1:
+		if startTime, err := t.getTimeFromArg(args[0]); err != nil {
+			resCode = RES_ERR
+		} else {
+			client.StartTime = startTime
+		}
+		client.EndTime = provider.GetCurrentTime()
 	default:
 		resCode = RES_ERR
 	}

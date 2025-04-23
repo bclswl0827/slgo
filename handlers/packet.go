@@ -52,8 +52,7 @@ func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket, dataTyp
 		// Send SeedLink packet data
 		slSeq := []byte(fmt.Sprintf("SL%06X", client.Sequence))
 		slBuffer := append(slSeq, slData...)
-		_, err = client.Write(slBuffer)
-		if err != nil {
+		if _, err = client.Write(slBuffer); err != nil {
 			return err
 		}
 

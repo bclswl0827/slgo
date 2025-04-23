@@ -8,7 +8,7 @@ import (
 
 // The Seedlink protocol specifies that the maximum length of a data packet is 512 bytes.
 // which can accommodate approximately 100 samples (int32, 4 bytes each).
-// Samples more than 100 will be sent in chunks of 100.
+// Samples more than 100 will be split into chunks of 100 samples per packet.
 const CHUNK_SIZE = 100
 
 // SeedLink handshake constant flags
@@ -26,6 +26,11 @@ const (
 	RES_ERR = "ERROR\r\n"
 )
 
+type SeedLinkChannel struct {
+	ChannelName string
+	ChannelType string
+}
+
 type SeedLinkClient struct {
 	net.Conn
 	Streaming bool
@@ -33,7 +38,7 @@ type SeedLinkClient struct {
 	Network   string
 	Station   string
 	Location  string
-	Channels  []string
+	Channels  []SeedLinkChannel
 	StartTime time.Time
 	EndTime   time.Time
 }
@@ -91,11 +96,11 @@ type SeedLinkProvider interface {
 	GetStations() []SeedLinkStation
 	GetStreams() []SeedLinkStream
 	GetCapabilities() []SeedLinkCapability
-	QueryHistory(startTime, endTime time.Time, channels []string) ([]SeedLinkDataPacket, error)
+	QueryHistory(startTime, endTime time.Time, channels []SeedLinkChannel) ([]SeedLinkDataPacket, error)
 }
 
 // Consumer interface for SeedLink server to stream data
 type SeedLinkConsumer interface {
-	Subscribe(clientId string, channels []string, eventHandler func(SeedLinkDataPacket)) error
+	Subscribe(clientId string, channels []SeedLinkChannel, eventHandler func(SeedLinkDataPacket)) error
 	Unsubscribe(clientId string) error
 }

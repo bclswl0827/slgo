@@ -13,33 +13,36 @@ type consumer struct {
 	subscribers cmap.ConcurrentMap[string, eventHandler]
 }
 
-func (c *consumer) Subscribe(clientId string, channels []string, eventHandler func(handlers.SeedLinkDataPacket)) error {
+func (c *consumer) Subscribe(clientId string, channels []handlers.SeedLinkChannel, eventHandler func(handlers.SeedLinkDataPacket)) error {
 	if _, ok := c.subscribers.Get(clientId); ok {
 		return errors.New("this client has already subscribed")
 	}
 	handler := func(data *adcRawData) {
 		// Match ADC channels to SeedLink channels
 		for _, channel := range channels {
-			switch channel {
+			if channel.ChannelType != "D" {
+				continue
+			}
+			switch channel.ChannelName {
 			case "EHZ":
 				eventHandler(handlers.SeedLinkDataPacket{
 					Timestamp:  data.Timestamp,
 					SampleRate: data.SampleRate,
-					Channel:    channel,
+					Channel:    channel.ChannelName,
 					DataArr:    data.Channel_1,
 				})
 			case "EHE":
 				eventHandler(handlers.SeedLinkDataPacket{
 					Timestamp:  data.Timestamp,
 					SampleRate: data.SampleRate,
-					Channel:    channel,
+					Channel:    channel.ChannelName,
 					DataArr:    data.Channel_2,
 				})
 			case "EHN":
 				eventHandler(handlers.SeedLinkDataPacket{
 					Timestamp:  data.Timestamp,
 					SampleRate: data.SampleRate,
-					Channel:    channel,
+					Channel:    channel.ChannelName,
 					DataArr:    data.Channel_3,
 				})
 			}

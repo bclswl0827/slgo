@@ -13,22 +13,28 @@ func (*SELECT) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 		return err
 	}
 
+	var channel SeedLinkChannel
 	locationAndChannel := args[0]
 	if len(locationAndChannel) < 5 {
 		_, err := client.Write([]byte(RES_ERR))
 		return err
 	}
 	if strings.Contains(locationAndChannel, ".") {
-		locationAndChannel = strings.Split(locationAndChannel, ".")[0]
+		splitedString := strings.Split(locationAndChannel, ".")
+		locationAndChannel = splitedString[0]
+		if len(splitedString) == 2 {
+			channel.ChannelType = splitedString[1]
+		}
 	}
 
 	if len(locationAndChannel) == 3 {
 		client.Location = "00"
-		client.Channels = append(client.Channels, locationAndChannel)
+		channel.ChannelName = locationAndChannel
 	} else if len(locationAndChannel) == 5 {
 		client.Location = locationAndChannel[:2]
-		client.Channels = append(client.Channels, locationAndChannel[2:5])
+		channel.ChannelName = locationAndChannel[2:5]
 	}
+	client.Channels = append(client.Channels, channel)
 
 	_, err := client.Write([]byte(RES_OK))
 	return err

@@ -42,26 +42,26 @@ func (p *provider) GetStreams() []handlers.SeedLinkStream {
 	return []handlers.SeedLinkStream{
 		{
 			BeginTime: p.GetStartTime().Format("2006-01-02 15:04:01"),
-			EndTime:   "9999-12-31 23:59:59",
+			EndTime:   p.GetCurrentTime().Format("2006-01-02 15:04:01"),
 			SeedName:  "EHZ",
 			Location:  "00",
-			Type:      "D",     // Always "D"
+			Type:      "D",
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
 			BeginTime: p.GetStartTime().Format("2006-01-02 15:04:01"),
-			EndTime:   "9999-12-31 23:59:59",
+			EndTime:   p.GetCurrentTime().Format("2006-01-02 15:04:01"),
 			SeedName:  "EHE",
 			Location:  "00",
-			Type:      "D",     // Always "D"
+			Type:      "D",
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 		{
 			BeginTime: p.GetStartTime().Format("2006-01-02 15:04:01"),
-			EndTime:   "9999-12-31 23:59:59",
+			EndTime:   p.GetCurrentTime().Format("2006-01-02 15:04:01"),
 			SeedName:  "EHN",
 			Location:  "00",
-			Type:      "D",     // Always "D"
+			Type:      "D",
 			Station:   "SHAKE", // Should match the station name in GetStations
 		},
 	}
@@ -76,7 +76,7 @@ func (p *provider) GetCapabilities() []handlers.SeedLinkCapability {
 	}
 }
 
-func (p *provider) QueryHistory(startTime, endTime time.Time, channels []string) ([]handlers.SeedLinkDataPacket, error) {
+func (p *provider) QueryHistory(startTime, endTime time.Time, channels []handlers.SeedLinkChannel) ([]handlers.SeedLinkDataPacket, error) {
 	var dataPackets []handlers.SeedLinkDataPacket
 
 	// Generate random data packets for each channel, every second
@@ -86,7 +86,7 @@ func (p *provider) QueryHistory(startTime, endTime time.Time, channels []string)
 			dataPacket := handlers.SeedLinkDataPacket{
 				Timestamp:  i,
 				SampleRate: SAMPLE_RATE,
-				Channel:    channel,
+				Channel:    channel.ChannelName,
 				DataArr:    generateRandomArray(SAMPLE_RATE, -32768, 32768),
 			}
 			dataPackets = append(dataPackets, dataPacket)
