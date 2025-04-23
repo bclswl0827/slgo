@@ -41,21 +41,18 @@ func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket, dataTyp
 		}
 
 		// Get MiniSEED data bytes always in 512 bytes
-		miniseed.Series[0].BlocketteSection.RecordLength = 9
+		for _, v := range miniseed.Series {
+			v.BlocketteSection.RecordLength = 9
+		}
 		slData, err := miniseed.Encode(mseedio.OVERWRITE, mseedio.MSBFIRST)
 		if err != nil {
 			return err
 		}
 
-		// Prepend and send SeedLink sequence number
-		slSeq := []byte(fmt.Sprintf("SL%06X", client.Sequence))
-		_, err = client.Write(slSeq)
-		if err != nil {
-			return err
-		}
-
 		// Send SeedLink packet data
-		_, err = client.Write(slData)
+		slSeq := []byte(fmt.Sprintf("SL%06X", client.Sequence))
+		slBuffer := append(slSeq, slData...)
+		_, err = client.Write(slBuffer)
 		if err != nil {
 			return err
 		}
