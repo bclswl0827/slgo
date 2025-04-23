@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"time"
 )
 
 type END struct {
@@ -16,16 +17,18 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 	}
 
 	// Query history data from database
-	historyRecords, err := provider.QueryHistory(client.StartTime, client.EndTime, client.Channels)
-	if err != nil {
-		client.Write([]byte(RES_ERR))
-		return err
-	}
-	for _, dataPacket := range historyRecords {
-		err = SendSeedLinkPacket(client, dataPacket, e.DataType)
+	if !client.EndTime.IsZero() {
+		historyRecords, err := provider.QueryHistory(client.StartTime, client.EndTime.Add(10*time.Second), client.Channels)
 		if err != nil {
 			client.Write([]byte(RES_ERR))
 			return err
+		}
+		for _, dataPacket := range historyRecords {
+			err = SendSeedLinkPacket(client, dataPacket, e.DataType)
+			if err != nil {
+				client.Write([]byte(RES_ERR))
+				return err
+			}
 		}
 	}
 
