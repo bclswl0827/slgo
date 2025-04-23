@@ -52,13 +52,13 @@ func main() {
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	defer ticker.Stop()
 
 	err := server.Start(ctx, HOST, PORT, true)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println("SeedLink server stopped")
+	log.Println("Stop SeedLink server")
+	ticker.Stop()
+	stop()
 }
