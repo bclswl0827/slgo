@@ -1,63 +1,64 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
 	"github.com/bclswl0827/mseedio"
 )
 
-func SendSeedLinkPacket(client *SeedLinkClient, data SeedLinkDataPacket, dataType int) error {
-	// Create data chunks to adapt to SeedLink packet size
-	var countGroup [][]int32
-	if len(data.DataArr) > CHUNK_SIZE {
-		for i := 0; i < len(data.DataArr); i += CHUNK_SIZE {
-			if i+CHUNK_SIZE > len(data.DataArr) {
-				countGroup = append(countGroup, data.DataArr[i:])
-			} else {
-				countGroup = append(countGroup, data.DataArr[i:i+CHUNK_SIZE])
-			}
+func chunkInt32Slice(data []int32, chunkSize int) [][]int32 {
+	var chunks [][]int32
+	for i := 0; i < len(data); i += chunkSize {
+		end := i + chunkSize
+		if end > len(data) {
+			end = len(data)
 		}
-	} else {
-		countGroup = append(countGroup, data.DataArr)
+		chunks = append(chunks, data[i:end])
 	}
+	return chunks
+}
+
+func SendSeedLinkPacket(station, location, network string, dataType int, sequence int64, data SeedLinkDataPacket) (newSequence int64, packetBuf []byte, err error) {
+	chunks := chunkInt32Slice(data.DataArr, CHUNK_SIZE)
 
 	dataSpanMs := 1000 / data.SampleRate
-	for i, c := range countGroup {
-		// Generate MiniSEED record
+	var buf bytes.Buffer
+
+	for i, c := range chunks {
 		var miniseed mseedio.MiniSeedData
 		miniseed.Init(dataType, mseedio.MSBFIRST)
+
+		startTime := time.UnixMilli(data.Timestamp + int64(i*CHUNK_SIZE*dataSpanMs)).UTC()
 		err := miniseed.Append(c, &mseedio.AppendOptions{
 			ChannelCode:    data.Channel,
-			StationCode:    client.Station,
-			LocationCode:   client.Location,
-			NetworkCode:    client.Network,
+			StationCode:    station,
+			LocationCode:   location,
+			NetworkCode:    network,
 			SampleRate:     float64(data.SampleRate),
-			SequenceNumber: fmt.Sprintf("%06d", client.Sequence),
-			StartTime:      time.UnixMilli(data.Timestamp + int64(i*CHUNK_SIZE*dataSpanMs)).UTC(),
+			SequenceNumber: fmt.Sprintf("%06d", sequence),
+			StartTime:      startTime,
 		})
 		if err != nil {
-			return err
+			return 0, nil, err
 		}
 
-		// Get MiniSEED data bytes always in 512 bytes
+		// Force 512-byte record
 		for _, v := range miniseed.Series {
 			v.BlocketteSection.RecordLength = 9
 		}
 		slData, err := miniseed.Encode(mseedio.OVERWRITE, mseedio.MSBFIRST)
 		if err != nil {
-			return err
+			return 0, nil, err
 		}
 
-		// Send SeedLink packet data
-		slSeq := []byte(fmt.Sprintf("SL%06X", client.Sequence))
-		slBuffer := append(slSeq, slData...)
-		if _, err = client.Write(slBuffer); err != nil {
-			return err
-		}
+		slSeq := fmt.Sprintf("SL%06X", sequence)
+		buf.Write([]byte(slSeq))
+		buf.Write(slData)
 
-		client.Sequence++
+		sequence++
 	}
 
-	return nil
+	return sequence, buf.Bytes(), nil
 }

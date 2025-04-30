@@ -13,7 +13,7 @@ func (*DATA) Callback(client *SeedLinkClient, provider SeedLinkProvider, consume
 			client.Write([]byte(RES_ERR))
 			return err
 		}
-		client.Sequence = seq + 1
+		client.SetSequence(seq + 1)
 	}
 	_, err := client.Write([]byte(RES_OK))
 	return err

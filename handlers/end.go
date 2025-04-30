@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"errors"
 )
 
@@ -15,32 +16,60 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 		return errors.New("start time not set")
 	}
 
+	var (
+		station  = client.Station
+		location = client.Location
+		network  = client.Network
+	)
+
+	// Subscribe to the message queue
+	client.Streaming = true
+	err := consumer.Subscribe(
+		client.RemoteAddr().String(),
+		client.Channels,
+		func(data SeedLinkDataPacket) {
+			newSeq, dataBytes, err := SendSeedLinkPacket(station, location, network, e.DataType, client.GetSequence(), data)
+			if err != nil {
+				consumer.Unsubscribe(client.RemoteAddr().String())
+				client.Write([]byte(RES_ERR))
+				client.Close()
+				return
+			}
+			if _, err = client.Write(dataBytes); err != nil {
+				consumer.Unsubscribe(client.RemoteAddr().String())
+				client.Close()
+				return
+			}
+			client.SetSequence(newSeq)
+		},
+	)
+	if err != nil {
+		client.Write([]byte(RES_ERR))
+		return err
+	}
+
 	// Query history data from database
 	historyRecords, err := provider.QueryHistory(client.StartTime, client.EndTime, client.Channels)
 	if err != nil {
 		client.Write([]byte(RES_ERR))
 		return err
 	}
+
+	var dataBytesBuf bytes.Buffer
 	for _, dataPacket := range historyRecords {
-		if err = SendSeedLinkPacket(client, dataPacket, e.DataType); err != nil {
+		newSeq, data, err := SendSeedLinkPacket(station, location, network, e.DataType, client.GetSequence(), dataPacket)
+		if err != nil {
 			client.Write([]byte(RES_ERR))
 			return err
 		}
+		dataBytesBuf.Write(data)
+		client.SetSequence(newSeq)
+	}
+	if _, err = client.Write(dataBytesBuf.Bytes()); err != nil {
+		return err
 	}
 
-	// Subscribe to the message queue
-	client.Streaming = true
-	return consumer.Subscribe(
-		client.RemoteAddr().String(),
-		client.Channels,
-		func(data SeedLinkDataPacket) {
-			if err := SendSeedLinkPacket(client, data, e.DataType); err != nil {
-				consumer.Unsubscribe(client.RemoteAddr().String())
-				client.Write([]byte(RES_ERR))
-				client.Close()
-			}
-		},
-	)
+	return nil
 }
 
 // Fallback of "END" command, implements handler interface

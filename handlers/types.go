@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/xml"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -33,8 +34,11 @@ type SeedLinkChannel struct {
 
 type SeedLinkClient struct {
 	net.Conn
+
+	sequenceMutex sync.Mutex
+	sequence      int64
+
 	Streaming bool
-	Sequence  int64
 	Network   string
 	Station   string
 	Location  string
