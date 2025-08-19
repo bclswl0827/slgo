@@ -45,8 +45,8 @@ func SendSeedLinkPacket(station, location, network string, dataType int, sequenc
 		}
 
 		// Force 512-byte record
-		for _, v := range miniseed.Series {
-			v.BlocketteSection.RecordLength = 9
+		for i := 0; i < len(miniseed.Series); i++ {
+			miniseed.Series[i].BlocketteSection.RecordLength = 9
 		}
 		slData, err := miniseed.Encode(mseedio.OVERWRITE, mseedio.MSBFIRST)
 		if err != nil {
