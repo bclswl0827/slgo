@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	"github.com/bclswl0827/slgo/handlers"
+	"github.com/samber/lo"
 )
 
 type provider struct {
@@ -77,7 +79,14 @@ func (p *provider) GetCapabilities() []handlers.SeedLinkCapability {
 }
 
 func (p *provider) QueryHistory(startTime, endTime time.Time, channels []handlers.SeedLinkChannel) ([]handlers.SeedLinkDataPacket, error) {
-	var dataPackets []handlers.SeedLinkDataPacket
+	channels = lo.Filter(channels, func(item handlers.SeedLinkChannel, _ int) bool {
+		return lo.Contains([]string{"EHN", "EHE", "EHZ"}, item.ChannelName)
+	})
+	if len(channels) == 0 {
+		return nil, errors.New("no available channel!")
+	}
+
+	dataPackets := make([]handlers.SeedLinkDataPacket, 0)
 
 	// Generate random data packets for each channel, every second
 	startTimestamp, endTimestamp := startTime.UnixMilli(), endTime.UnixMilli()
@@ -87,7 +96,7 @@ func (p *provider) QueryHistory(startTime, endTime time.Time, channels []handler
 				Timestamp:  i,
 				SampleRate: SAMPLE_RATE,
 				Channel:    channel.ChannelName,
-				DataArr:    generateRandomArray(SAMPLE_RATE, -32768, 32768),
+				DataArr:    generateSineWave(SAMPLE_RATE),
 			}
 			dataPackets = append(dataPackets, dataPacket)
 		}

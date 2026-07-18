@@ -1,18 +1,18 @@
 package main
 
-import (
-	"time"
+import "math"
 
-	"math/rand"
+const (
+	sineFrequency = 1.0
+	amplitude     = 1000
 )
 
-func generateRandomArray(length int, min, max int32) []int32 {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	arr := make([]int32, length)
-
-	for i := 0; i < length; i++ {
-		arr[i] = min + rand.Int31n(max-min+1)
+// generateSineWave returns one second of a 1 Hz sine wave.
+func generateSineWave(sampleRate int) []int32 {
+	samples := make([]int32, sampleRate)
+	for i := range samples {
+		phase := 2 * math.Pi * sineFrequency * float64(i) / float64(sampleRate)
+		samples[i] = int32(math.Round(float64(amplitude) * math.Sin(phase)))
 	}
-
-	return arr
+	return samples
 }

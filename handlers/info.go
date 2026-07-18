@@ -1,11 +1,12 @@
 package handlers
 
 import (
+	"encoding/xml"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bclswl0827/mseedio"
-	"github.com/clbanning/anyxml"
 )
 
 type INFO struct{}
@@ -13,12 +14,12 @@ type INFO struct{}
 // Callback of "INFO <...>" command, implements handler interface
 func (i *INFO) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	err := fmt.Errorf("arg error")
-	if len(args) < 1 {
+	if len(args) != 1 {
 		return err
 	}
 
 	var (
-		action    = args[0]
+		action    = strings.ToUpper(args[0])
 		dataBytes []byte
 	)
 	switch action {
@@ -26,8 +27,10 @@ func (i *INFO) Callback(client *SeedLinkClient, provider SeedLinkProvider, consu
 		dataBytes, err = i.getID(provider, FLAG_INF)
 	case "STATIONS":
 		dataBytes, err = i.getStations(provider)
-	case "CAPABILITIES", "CONNECTIONS":
+	case "CAPABILITIES":
 		dataBytes, err = i.getCapabilities(provider)
+	case "CONNECTIONS":
+		dataBytes, err = i.getID(provider, FLAG_ERR)
 	case "STREAMS":
 		dataBytes, err = i.getStreams(provider)
 	default:
@@ -48,12 +51,12 @@ func (i *INFO) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consu
 
 // getID returns response of "INFO ID" command
 func (i *INFO) getID(provider SeedLinkProvider, flag int) ([]byte, error) {
-	result := map[string]string{
-		"-software":     provider.GetSoftware(),
-		"-started":      provider.GetStartTime().Format("2006-01-02 15:04:01"),
-		"-organization": provider.GetOrganization(),
+	result := seedLinkInfo{
+		Software:     provider.GetSoftware(),
+		Started:      formatInfoTime(provider.GetStartTime()),
+		Organization: provider.GetOrganization(),
 	}
-	xmlData, err := anyxml.Xml(result, "seedlink")
+	xmlData, err := xml.Marshal(result)
 	if err != nil {
 		return []byte(RES_ERR), err
 	}
@@ -65,13 +68,13 @@ func (i *INFO) getID(provider SeedLinkProvider, flag int) ([]byte, error) {
 
 // getStations returns response of "INFO STATIONS" command
 func (i *INFO) getStations(provider SeedLinkProvider) ([]byte, error) {
-	result := map[string]any{
-		"-software":     provider.GetSoftware(),
-		"-started":      provider.GetStartTime().Format("2006-01-02 15:04:01"),
-		"-organization": provider.GetOrganization(),
-		"station":       provider.GetStations(),
+	result := seedLinkInfo{
+		Software:     provider.GetSoftware(),
+		Started:      formatInfoTime(provider.GetStartTime()),
+		Organization: provider.GetOrganization(),
+		Stations:     stationInfo(provider.GetStations(), nil),
 	}
-	xmlData, err := anyxml.Xml(result, "seedlink")
+	xmlData, err := xml.Marshal(result)
 	if err != nil {
 		return []byte(RES_ERR), err
 	}
@@ -83,13 +86,13 @@ func (i *INFO) getStations(provider SeedLinkProvider) ([]byte, error) {
 
 // getCapabilities returns response of "INFO CAPABILITIES" command
 func (i *INFO) getCapabilities(provider SeedLinkProvider) ([]byte, error) {
-	result := map[string]any{
-		"-software":     provider.GetSoftware(),
-		"-started":      provider.GetStartTime().Format("2006-01-02 15:04:01"),
-		"-organization": provider.GetOrganization(),
-		"capability":    provider.GetCapabilities(),
+	result := seedLinkInfo{
+		Software:     provider.GetSoftware(),
+		Started:      formatInfoTime(provider.GetStartTime()),
+		Organization: provider.GetOrganization(),
+		Capabilities: provider.GetCapabilities(),
 	}
-	xmlData, err := anyxml.Xml(result, "seedlink")
+	xmlData, err := xml.Marshal(result)
 	if err != nil {
 		return []byte(RES_ERR), err
 	}
@@ -101,35 +104,14 @@ func (i *INFO) getCapabilities(provider SeedLinkProvider) ([]byte, error) {
 
 // getStreams returns response of "INFO STREAMS" command
 func (i *INFO) getStreams(provider SeedLinkProvider) ([]byte, error) {
-	type respModel struct {
-		SeedLinkStation
-		Streams     []SeedLinkStream `xml:"stream"`
-		StreamCheck string           `xml:"stream_check,attr"`
+	result := seedLinkInfo{
+		Software:     provider.GetSoftware(),
+		Started:      formatInfoTime(provider.GetStartTime()),
+		Organization: provider.GetOrganization(),
+		Stations:     stationInfo(provider.GetStations(), provider.GetStreams()),
 	}
-	result := map[any]any{
-		"-software":     provider.GetSoftware(),
-		"-started":      provider.GetStartTime().Format("2006-01-02 15:04:01"),
-		"-organization": provider.GetOrganization(),
-	}
-	var resp []respModel
-	for _, v := range provider.GetStations() {
-		// Match stream by station name
-		var availableStreams []SeedLinkStream
-		for _, s := range provider.GetStreams() {
-			if s.Station == v.Station {
-				availableStreams = append(availableStreams, s)
-			}
-		}
-		resp = append(resp, respModel{
-			SeedLinkStation: v,
-			Streams:         availableStreams,
-			StreamCheck:     "enabled",
-		})
-	}
-	result["station"] = resp
-	xmlData, err := anyxml.Xml(result, "seedlink")
+	xmlData, err := xml.Marshal(result)
 	if err != nil {
-		fmt.Println(err)
 		return []byte(RES_ERR), err
 	}
 	// Set XML header and return response
@@ -162,25 +144,28 @@ func (i *INFO) setResponse(body []byte, errFlag int, startTime time.Time) ([]byt
 	// Split data into 512 bytes each
 	bodyLength := len(bodyBuffer)
 	dataLength := (512 - mseedio.FIXED_SECTION_LENGTH - mseedio.BLOCKETTE100X_SECTION_LENGTH)
-	fullLength := bodyLength + mseedio.FIXED_SECTION_LENGTH + mseedio.BLOCKETTE100X_SECTION_LENGTH
-	blockCount := fullLength / 512
+	blockCount := (bodyLength + dataLength - 1) / dataLength
+	if blockCount == 0 {
+		blockCount = 1
+	}
 	// "SLINFO<space>*" or "SLINFO<space><space>" is signature
 	// * indicates non-final block, <space> indicates final block
-	blockHeader := []byte{'S', 'L', 'I', 'N', 'F', 'O', ' ', '*'}
 	// Append each block to MiniSeed data
 	var resultBuffer []byte
-	for i := 0; i <= blockCount; i++ {
-		startIndex := i * dataLength
-		endIndex := (i + 1) * dataLength
-		if i == blockCount {
-			// Set final block flag
-			blockHeader[7] = ' '
+	for blockIndex := 0; blockIndex < blockCount; blockIndex++ {
+		startIndex := blockIndex * dataLength
+		endIndex := (blockIndex + 1) * dataLength
+		if endIndex > bodyLength {
 			endIndex = bodyLength
+		}
+		blockHeader := []byte("SLINFO *")
+		if blockIndex == blockCount-1 {
+			blockHeader[7] = ' '
 		}
 		err := miniseed.Append(
 			bodyBuffer[startIndex:endIndex],
 			&mseedio.AppendOptions{
-				SequenceNumber: fmt.Sprintf("%06d", i+1),
+				SequenceNumber: fmt.Sprintf("%06d", (blockIndex%999999)+1),
 				ChannelCode:    channelCode,
 				StartTime:      startTime,
 				StationCode:    "INFO ",
@@ -202,7 +187,45 @@ func (i *INFO) setResponse(body []byte, errFlag int, startTime time.Time) ([]byt
 			// Fill with 0x00 if length is less than 512
 			res = append(res, make([]byte, 512-len(res))...)
 		}
-		resultBuffer = append(resultBuffer, append(blockHeader, res...)...)
+		resultBuffer = append(resultBuffer, blockHeader...)
+		resultBuffer = append(resultBuffer, res...)
 	}
 	return resultBuffer, nil
+}
+
+type seedLinkInfo struct {
+	XMLName      xml.Name              `xml:"seedlink"`
+	Software     string                `xml:"software,attr"`
+	Started      string                `xml:"started,attr"`
+	Organization string                `xml:"organization,attr"`
+	Capabilities []SeedLinkCapability  `xml:"capability,omitempty"`
+	Stations     []seedLinkStationInfo `xml:"station,omitempty"`
+}
+
+type seedLinkStationInfo struct {
+	SeedLinkStation
+	StreamCheck string           `xml:"stream_check,attr,omitempty"`
+	Streams     []SeedLinkStream `xml:"stream,omitempty"`
+}
+
+func stationInfo(stations []SeedLinkStation, streams []SeedLinkStream) []seedLinkStationInfo {
+	result := make([]seedLinkStationInfo, 0, len(stations))
+	includeStreams := streams != nil
+	for _, station := range stations {
+		item := seedLinkStationInfo{SeedLinkStation: station}
+		if includeStreams {
+			item.StreamCheck = "enabled"
+			for _, stream := range streams {
+				if stream.Station == station.Station {
+					item.Streams = append(item.Streams, stream)
+				}
+			}
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func formatInfoTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02 15:04:05")
 }

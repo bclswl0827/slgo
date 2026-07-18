@@ -5,6 +5,9 @@ type BATCH struct{}
 // Callback of "BATCH" command, implements handler interface
 func (*BATCH) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
 	_, err := client.Write([]byte(RES_OK))
+	if err == nil {
+		client.enableBatchMode()
+	}
 	return err
 }
 

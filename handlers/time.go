@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -11,31 +12,28 @@ type TIME struct{}
 
 // Callback of "TIME <...>" command, implements handler interface
 func (t *TIME) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
-	resCode := RES_OK
-	switch len(args) {
-	case 2:
-		if startTime, err := t.getTimeFromArg(args[0]); err != nil {
-			resCode = RES_ERR
-		} else {
-			client.StartTime = startTime
-		}
-		if endTime, err := t.getTimeFromArg(args[1]); err != nil {
-			resCode = RES_ERR
-		} else {
-			client.EndTime = endTime
-		}
-	case 1:
-		if startTime, err := t.getTimeFromArg(args[0]); err != nil {
-			resCode = RES_ERR
-		} else {
-			client.StartTime = startTime
-		}
-		client.EndTime = provider.GetCurrentTime()
-	default:
-		resCode = RES_ERR
+	if len(args) < 1 || len(args) > 2 {
+		_, err := client.Write([]byte(RES_ERR))
+		return err
 	}
 
-	_, err := client.Write([]byte(resCode))
+	startTime, err := parseSeedLinkTime(args[0])
+	if err != nil || startTime.After(provider.GetCurrentTime()) {
+		_, writeErr := client.Write([]byte(RES_ERR))
+		return writeErr
+	}
+	endTime := provider.GetCurrentTime()
+	if len(args) == 2 {
+		endTime, err = parseSeedLinkTime(args[1])
+		if err != nil || endTime.Before(startTime) {
+			_, writeErr := client.Write([]byte(RES_ERR))
+			return writeErr
+		}
+	}
+
+	client.StartTime = startTime
+	client.EndTime = endTime
+	_, err = client.Write([]byte(RES_OK))
 	return err
 }
 
@@ -45,6 +43,10 @@ func (*TIME) Fallback(client *SeedLinkClient, provider SeedLinkProvider, consume
 }
 
 func (*TIME) getTimeFromArg(timeStr string) (time.Time, error) {
+	return parseSeedLinkTime(timeStr)
+}
+
+func parseSeedLinkTime(timeStr string) (time.Time, error) {
 	splitTimeStr := strings.Split(timeStr, ",")
 	if len(splitTimeStr) != 6 {
 		return time.Time{}, errors.New("time string must have 6 comma-separated values")
@@ -78,10 +80,24 @@ func (*TIME) getTimeFromArg(timeStr string) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	second, err := strconv.Atoi(splitTimeStr[5])
+	secondValue, err := strconv.ParseFloat(splitTimeStr[5], 64)
 	if err != nil {
 		return time.Time{}, err
 	}
+	if secondValue < 0 || secondValue >= 60 {
+		return time.Time{}, errors.New("seconds must be in the range [0, 60)")
+	}
+	second, fractional := math.Modf(secondValue)
+	nanosecond := int(math.Round(fractional * float64(time.Second)))
+	if nanosecond == int(time.Second) {
+		second++
+		nanosecond = 0
+	}
 
-	return time.Date(year, month, day, hour, minute, second, 0, time.UTC), nil
+	parsed := time.Date(year, month, day, hour, minute, int(second), nanosecond, time.UTC)
+	if parsed.Year() != year || parsed.Month() != month || parsed.Day() != day ||
+		parsed.Hour() != hour || parsed.Minute() != minute || parsed.Second() != int(second) {
+		return time.Time{}, errors.New("time contains an out-of-range value")
+	}
+	return parsed, nil
 }

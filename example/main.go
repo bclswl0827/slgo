@@ -29,9 +29,9 @@ func main() {
 			messageBus.Publish(TOPIC_NAME, &adcRawData{
 				SampleRate: SAMPLE_RATE,
 				Timestamp:  time.Now().UnixMilli(),
-				Channel_1:  generateRandomArray(SAMPLE_RATE, -32768, 32768),
-				Channel_2:  generateRandomArray(SAMPLE_RATE, -32768, 32768),
-				Channel_3:  generateRandomArray(SAMPLE_RATE, -32768, 32768),
+				Channel_1:  generateSineWave(SAMPLE_RATE),
+				Channel_2:  generateSineWave(SAMPLE_RATE),
+				Channel_3:  generateSineWave(SAMPLE_RATE),
 			})
 		}
 	}()

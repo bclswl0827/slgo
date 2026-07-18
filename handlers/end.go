@@ -1,9 +1,6 @@
 package handlers
 
-import (
-	"bytes"
-	"errors"
-)
+import "sync"
 
 type END struct {
 	DataType int
@@ -11,61 +8,103 @@ type END struct {
 
 // Callback of "END" command, implements handler interface
 func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consumer SeedLinkConsumer, args ...string) error {
-	if client.StartTime.IsZero() {
-		client.Write([]byte(RES_ERR))
-		return errors.New("start time not set")
-	}
-
 	var (
 		station  = client.Station
 		location = client.Location
 		network  = client.Network
 	)
+	clientID := client.RemoteAddr().String()
 
-	// Subscribe to the message queue
-	client.Streaming = true
+	var (
+		deliveryMutex sync.Mutex
+		pending       []SeedLinkDataPacket
+		historyReady  bool
+		failed        bool
+	)
+	deliver := func(data SeedLinkDataPacket) error {
+		newSeq, dataBytes, err := SendSeedLinkPacket(
+			station, location, network, e.DataType, client.GetSequence(), data,
+		)
+		if err != nil {
+			return err
+		}
+		if len(dataBytes) > 0 {
+			if _, err = client.Write(dataBytes); err != nil {
+				return err
+			}
+		}
+		client.SetSequence(newSeq)
+		return nil
+	}
+
+	// Subscribe before querying history so live packets arriving during the
+	// query can be queued and delivered after the historical window.
 	err := consumer.Subscribe(
-		client.RemoteAddr().String(),
+		clientID,
 		client.Channels,
 		func(data SeedLinkDataPacket) {
-			newSeq, dataBytes, err := SendSeedLinkPacket(station, location, network, e.DataType, client.GetSequence(), data)
-			if err != nil {
-				consumer.Unsubscribe(client.RemoteAddr().String())
-				client.Write([]byte(RES_ERR))
-				client.Close()
+			deliveryMutex.Lock()
+			defer deliveryMutex.Unlock()
+			if failed {
 				return
 			}
-			if _, err = client.Write(dataBytes); err != nil {
-				consumer.Unsubscribe(client.RemoteAddr().String())
-				client.Close()
+			if !historyReady {
+				data.DataArr = append([]int32(nil), data.DataArr...)
+				pending = append(pending, data)
 				return
 			}
-			client.SetSequence(newSeq)
+			if err := deliver(data); err != nil {
+				failed = true
+				_ = client.Close()
+			}
 		},
 	)
 	if err != nil {
-		client.Write([]byte(RES_ERR))
+		_, _ = client.Write([]byte(RES_ERR))
 		return err
 	}
+	client.Streaming = true
 
-	// Query history data from database
-	historyRecords, err := provider.QueryHistory(client.StartTime, client.EndTime, client.Channels)
-	if err != nil {
-		client.Write([]byte(RES_ERR))
-		return err
-	}
-
-	var dataBytesBuf bytes.Buffer
-	for _, dataPacket := range historyRecords {
-		newSeq, data, err := SendSeedLinkPacket(station, location, network, e.DataType, client.GetSequence(), dataPacket)
+	var historyRecords []SeedLinkDataPacket
+	if !client.StartTime.IsZero() {
+		endTime := client.EndTime
+		if endTime.IsZero() {
+			endTime = provider.GetCurrentTime()
+		}
+		historyRecords, err = provider.QueryHistory(client.StartTime, endTime, client.Channels)
 		if err != nil {
-			client.Write([]byte(RES_ERR))
+			deliveryMutex.Lock()
+			failed = true
+			deliveryMutex.Unlock()
+			_ = consumer.Unsubscribe(clientID)
+			client.Streaming = false
+			_, _ = client.Write([]byte(RES_ERR))
 			return err
 		}
-		dataBytesBuf.Write(data)
-		client.SetSequence(newSeq)
 	}
-	if _, err = client.Write(dataBytesBuf.Bytes()); err != nil {
+
+	deliveryMutex.Lock()
+	for _, dataPacket := range historyRecords {
+		if err = deliver(dataPacket); err != nil {
+			break
+		}
+	}
+	for _, dataPacket := range pending {
+		if err != nil {
+			break
+		}
+		err = deliver(dataPacket)
+	}
+	pending = nil
+	if err == nil {
+		historyReady = true
+	} else {
+		failed = true
+	}
+	deliveryMutex.Unlock()
+	if err != nil {
+		_ = consumer.Unsubscribe(clientID)
+		client.Streaming = false
 		return err
 	}
 

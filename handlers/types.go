@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/xml"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -37,6 +39,10 @@ type SeedLinkClient struct {
 
 	sequenceMutex sync.Mutex
 	sequence      int64
+	writeMutex    sync.Mutex
+	stateMutex    sync.RWMutex
+	batch         bool
+	onData        func(*SeedLinkClient, []byte)
 
 	Streaming bool
 	Network   string
@@ -45,6 +51,61 @@ type SeedLinkClient struct {
 	Channels  []SeedLinkChannel
 	StartTime time.Time
 	EndTime   time.Time
+}
+
+// Write serializes writes to a client connection. Streaming callbacks and
+// command handlers may write concurrently, but SeedLink records must never be
+// interleaved on the wire.
+func (c *SeedLinkClient) Write(data []byte) (int, error) {
+	if c == nil || c.Conn == nil {
+		return 0, net.ErrClosed
+	}
+
+	c.stateMutex.RLock()
+	suppress := c.batch && (bytes.Equal(data, []byte(RES_OK)) || bytes.Equal(data, []byte(RES_ERR)))
+	hook := c.onData
+	c.stateMutex.RUnlock()
+	if suppress {
+		return len(data), nil
+	}
+
+	c.writeMutex.Lock()
+	written := 0
+	for written < len(data) {
+		n, err := c.Conn.Write(data[written:])
+		written += n
+		if err != nil {
+			c.writeMutex.Unlock()
+			if hook != nil && written > 0 {
+				hook(c, data[:written])
+			}
+			return written, err
+		}
+		if n == 0 {
+			c.writeMutex.Unlock()
+			return written, io.ErrNoProgress
+		}
+	}
+	c.writeMutex.Unlock()
+
+	if hook != nil && written > 0 {
+		hook(c, data[:written])
+	}
+	return written, nil
+}
+
+// SetDataHandler configures the callback invoked after bytes are written to
+// the connection. It is primarily used by SeedLinkServer to implement OnData.
+func (c *SeedLinkClient) SetDataHandler(handler func(*SeedLinkClient, []byte)) {
+	c.stateMutex.Lock()
+	c.onData = handler
+	c.stateMutex.Unlock()
+}
+
+func (c *SeedLinkClient) enableBatchMode() {
+	c.stateMutex.Lock()
+	c.batch = true
+	c.stateMutex.Unlock()
 }
 
 // SeedLink event hooks interface
