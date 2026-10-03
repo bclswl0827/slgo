@@ -53,7 +53,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	err := server.Start(ctx, HOST, PORT, true)
+	err := server.Start(ctx, HOST, PORT, slgo.CompressionSteim1)
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -4,6 +4,14 @@ import (
 	"github.com/bclswl0827/slgo/handlers"
 )
 
+type Compression uint8
+
+const (
+	CompressionNone Compression = iota
+	CompressionSteim1
+	CompressionSteim2
+)
+
 type handler interface {
 	Callback(*handlers.SeedLinkClient, handlers.SeedLinkProvider, handlers.SeedLinkConsumer, ...string) error
 	Fallback(*handlers.SeedLinkClient, handlers.SeedLinkProvider, handlers.SeedLinkConsumer, ...string)

@@ -39,8 +39,10 @@ Create a server by providing implementations of the provider, consumer and hooks
 
 ```go
 server := slgo.New(myProvider, myConsumer, myHooks)
-err := server.Start(ctx, "0.0.0.0", 18000, true)
+err := server.Start(ctx, "0.0.0.0", 18000, slgo.CompressionSteim2)
 ```
+
+The compression argument accepts `slgo.CompressionNone`, `slgo.CompressionSteim1`, or `slgo.CompressionSteim2`.
 
 - `myProvider` should implement methods like `GetStations()`, `GetStreams()`, `QueryHistory(start,end,channels)`.
 - `myConsumer` should implement `Subscribe(clientId, channels, handler)` and `Unsubscribe(clientId)`.

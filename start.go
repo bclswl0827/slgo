@@ -11,7 +11,7 @@ import (
 	"github.com/bclswl0827/slgo/handlers"
 )
 
-func (s *SeedLinkServer) Start(ctx context.Context, host string, port int, compress bool) error {
+func (s *SeedLinkServer) Start(ctx context.Context, host string, port int, compression Compression) error {
 	if ctx == nil {
 		return errors.New("slgo: nil context")
 	}
@@ -25,17 +25,22 @@ func (s *SeedLinkServer) Start(ctx context.Context, host string, port int, compr
 		return nil
 	}
 
+	packetDataType := mseedio.INT32
+	switch compression {
+	case CompressionNone:
+	case CompressionSteim1:
+		packetDataType = mseedio.STEIM1
+	case CompressionSteim2:
+		packetDataType = mseedio.STEIM2
+	default:
+		return fmt.Errorf("slgo: unsupported compression: %d", compression)
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
-
-	// Set packet data type to INT32 or STEIM2
-	packetDataType := mseedio.INT32
-	if compress {
-		packetDataType = mseedio.STEIM2
-	}
 
 	// Builtin implementation of command handlers
 	commands := builtinCommands(packetDataType)
