@@ -25,10 +25,10 @@ func main() {
 	ticker := time.NewTicker(time.Second)
 	go func() {
 		for {
-			<-ticker.C
+			tick := <-ticker.C
 			messageBus.Publish(TOPIC_NAME, &adcRawData{
 				SampleRate: SAMPLE_RATE,
-				Timestamp:  time.Now().UnixMilli(),
+				Timestamp:  tick.Truncate(time.Second).UnixMilli(),
 				Channel_1:  generateSineWave(SAMPLE_RATE),
 				Channel_2:  generateSineWave(SAMPLE_RATE),
 				Channel_3:  generateSineWave(SAMPLE_RATE),

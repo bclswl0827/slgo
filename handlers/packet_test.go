@@ -52,7 +52,7 @@ func TestSendSeedLinkPacketFramingSequenceAndTiming(t *testing.T) {
 	if first.SamplesNumber != 100 || second.SamplesNumber != 1 {
 		t.Fatalf("sample counts = %d, %d", first.SamplesNumber, second.SamplesNumber)
 	}
-	wantSecond := started.Add(100 * time.Second / 30).Truncate(100 * time.Microsecond)
+	wantSecond := started.Add(3333400 * time.Microsecond)
 	if !second.StartTime.Equal(wantSecond) {
 		t.Fatalf("second start = %s, want %s", second.StartTime, wantSecond)
 	}
@@ -167,6 +167,139 @@ func TestEndSendsHistoryBeforeQueuedLiveData(t *testing.T) {
 	}
 }
 
+func TestEndTrimsOverlappingLiveSamples(t *testing.T) {
+	started := time.Date(2024, 1, 2, 3, 0, 0, 0, time.UTC)
+	conn := &memoryConn{}
+	client := &SeedLinkClient{
+		Conn:      conn,
+		Station:   "STA",
+		Network:   "NW",
+		Location:  "00",
+		StartTime: started,
+		EndTime:   started.Add(2 * time.Second),
+	}
+	provider := testProvider{history: []SeedLinkDataPacket{{
+		Timestamp:  started.Add(250 * time.Millisecond).UnixMilli(),
+		SampleRate: 4,
+		Channel:    "BHZ",
+		DataArr:    []int32{1, 2, 3, 4},
+	}}}
+	consumer := &testConsumer{onSubscribe: func(handler func(SeedLinkDataPacket)) {
+		handler(SeedLinkDataPacket{
+			Timestamp:  started.Add(time.Second).UnixMilli(),
+			SampleRate: 4,
+			Channel:    "BHZ",
+			DataArr:    []int32{5, 6, 7, 8},
+		})
+		handler(SeedLinkDataPacket{
+			Timestamp:  started.Add(1250 * time.Millisecond).UnixMilli(),
+			SampleRate: 4,
+			Channel:    "BHZ",
+			DataArr:    []int32{6, 7, 8},
+		})
+	}}
+
+	if err := (&END{DataType: mseedio.INT32}).Callback(client, provider, consumer); err != nil {
+		t.Fatal(err)
+	}
+	output := conn.Bytes()
+	if len(output) != 1040 {
+		t.Fatalf("stream length = %d, want 1040", len(output))
+	}
+	var second mseedio.FixedSection
+	if err := second.Parse(output[528:576], mseedio.MSBFIRST); err != nil {
+		t.Fatal(err)
+	}
+	if second.SamplesNumber != 3 || !second.StartTime.Equal(started.Add(1250*time.Millisecond)) {
+		t.Fatalf("second record has %d samples at %s", second.SamplesNumber, second.StartTime)
+	}
+	if got := int32(binary.BigEndian.Uint32(output[592:596])); got != 6 {
+		t.Fatalf("first live sample = %d, want 6", got)
+	}
+}
+
+func TestEndPreservesContiguousSamplesRoundedToMilliseconds(t *testing.T) {
+	started := time.Date(2024, 1, 2, 3, 0, 0, 0, time.UTC)
+	conn := &memoryConn{}
+	client := &SeedLinkClient{
+		Conn:      conn,
+		Station:   "STA",
+		Network:   "NW",
+		Location:  "00",
+		StartTime: started,
+		EndTime:   started.Add(4 * time.Second),
+	}
+	provider := testProvider{history: []SeedLinkDataPacket{{
+		Timestamp:  started.UnixMilli(),
+		SampleRate: 30,
+		Channel:    "BHZ",
+		DataArr:    make([]int32, 100),
+	}}}
+	consumer := &testConsumer{onSubscribe: func(handler func(SeedLinkDataPacket)) {
+		handler(SeedLinkDataPacket{
+			Timestamp:  started.Add(3333 * time.Millisecond).UnixMilli(),
+			SampleRate: 30,
+			Channel:    "BHZ",
+			DataArr:    []int32{7},
+		})
+	}}
+
+	if err := (&END{DataType: mseedio.INT32}).Callback(client, provider, consumer); err != nil {
+		t.Fatal(err)
+	}
+	output := conn.Bytes()
+	if len(output) != 1040 {
+		t.Fatalf("stream length = %d, want 1040", len(output))
+	}
+	var second mseedio.FixedSection
+	if err := second.Parse(output[528:576], mseedio.MSBFIRST); err != nil {
+		t.Fatal(err)
+	}
+	if second.SamplesNumber != 1 || !second.StartTime.Equal(started.Add(3333400*time.Microsecond)) {
+		t.Fatalf("second record has %d samples at %s", second.SamplesNumber, second.StartTime)
+	}
+	if got := int32(binary.BigEndian.Uint32(output[592:596])); got != 7 {
+		t.Fatalf("live sample = %d, want 7", got)
+	}
+}
+
+func TestEndClipsHistoryToRequestedStart(t *testing.T) {
+	started := time.Date(2024, 1, 2, 3, 0, 0, 0, time.UTC)
+	conn := &memoryConn{}
+	client := &SeedLinkClient{
+		Conn:      conn,
+		Station:   "STA",
+		Network:   "NW",
+		Location:  "00",
+		StartTime: started.Add(500 * time.Millisecond),
+		EndTime:   started.Add(time.Second),
+	}
+	provider := testProvider{history: []SeedLinkDataPacket{{
+		Timestamp:  started.UnixMilli(),
+		SampleRate: 4,
+		Channel:    "BHZ",
+		DataArr:    []int32{1, 2, 3, 4},
+	}}}
+
+	if err := (&END{DataType: mseedio.INT32}).Callback(client, provider, &testConsumer{}); err != nil {
+		t.Fatal(err)
+	}
+	output := conn.Bytes()
+	if len(output) != 520 {
+		t.Fatalf("stream length = %d, want 520", len(output))
+	}
+	var first mseedio.FixedSection
+	if err := first.Parse(output[8:56], mseedio.MSBFIRST); err != nil {
+		t.Fatal(err)
+	}
+	if first.SamplesNumber != 2 || !first.StartTime.Equal(started.Add(500*time.Millisecond)) {
+		t.Fatalf("history record has %d samples at %s", first.SamplesNumber, first.StartTime)
+	}
+	if got := int32(binary.BigEndian.Uint32(output[72:76])); got != 3 {
+		t.Fatalf("first history sample = %d, want 3", got)
+	}
+}
+
 func unpackInfoBody(t *testing.T, response []byte) []byte {
 	t.Helper()
 	var body []byte
@@ -181,7 +314,9 @@ func unpackInfoBody(t *testing.T, response []byte) []byte {
 	return body
 }
 
-type testProvider struct{}
+type testProvider struct {
+	history []SeedLinkDataPacket
+}
 
 func (testProvider) GetSoftware() string       { return "test-server" }
 func (testProvider) GetStartTime() time.Time   { return time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC) }
@@ -196,7 +331,10 @@ func (testProvider) GetStations() []SeedLinkStation {
 func (testProvider) GetStreams() []SeedLinkStream {
 	return []SeedLinkStream{{Station: "STA", Location: "00", SeedName: "BHZ", Type: "D"}}
 }
-func (testProvider) QueryHistory(time.Time, time.Time, []SeedLinkChannel) ([]SeedLinkDataPacket, error) {
+func (p testProvider) QueryHistory(time.Time, time.Time, []SeedLinkChannel) ([]SeedLinkDataPacket, error) {
+	if p.history != nil {
+		return p.history, nil
+	}
 	return []SeedLinkDataPacket{{Timestamp: time.Date(2024, 1, 2, 3, 0, 0, 0, time.UTC).UnixMilli(), SampleRate: 1, Channel: "BHZ", DataArr: []int32{1}}}, nil
 }
 

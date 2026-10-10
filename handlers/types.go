@@ -146,7 +146,7 @@ type SeedLinkCapability struct {
 
 // SeedLink data packet model
 type SeedLinkDataPacket struct {
-	Timestamp  int64
+	Timestamp  int64 // Unix milliseconds of the first sample.
 	SampleRate int
 	Channel    string
 	DataArr    []int32

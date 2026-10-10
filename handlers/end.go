@@ -1,6 +1,10 @@
 package handlers
 
-import "sync"
+import (
+	"sort"
+	"sync"
+	"time"
+)
 
 type END struct {
 	DataType int
@@ -20,10 +24,36 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 		pending       []SeedLinkDataPacket
 		historyReady  bool
 		failed        bool
+		sentThrough   = make(map[string]time.Time)
 	)
 	deliver := func(data SeedLinkDataPacket) error {
-		newSeq, dataBytes, err := SendSeedLinkPacket(
-			station, location, network, e.DataType, client.GetSequence(), data,
+		startTime := time.UnixMilli(data.Timestamp).UTC()
+		if data.SampleRate > 0 && len(data.DataArr) > 0 {
+			previousEnd := sentThrough[data.Channel]
+			if previousEnd.Before(client.StartTime) {
+				previousEnd = client.StartTime
+			}
+			if previousEnd.After(startTime) {
+				// Millisecond timestamps can round a contiguous record back by less
+				// than one millisecond. Preserve its samples and correct the time.
+				if previousEnd.Sub(startTime) < time.Millisecond && data.SampleRate < 1000 {
+					startTime = previousEnd
+				} else {
+					// Find the first sample at or after the end of this channel's
+					// previous record. Search avoids overflowing rate * duration.
+					skip := sort.Search(len(data.DataArr), func(i int) bool {
+						return !sampleTime(startTime, i, data.SampleRate).Before(previousEnd)
+					})
+					if skip >= len(data.DataArr) {
+						return nil
+					}
+					startTime = sampleTime(startTime, skip, data.SampleRate)
+					data.DataArr = data.DataArr[skip:]
+				}
+			}
+		}
+		newSeq, dataBytes, recordEnd, err := sendSeedLinkPacketAt(
+			station, location, network, e.DataType, client.GetSequence(), data, startTime,
 		)
 		if err != nil {
 			return err
@@ -34,6 +64,7 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 			}
 		}
 		client.SetSequence(newSeq)
+		sentThrough[data.Channel] = recordEnd
 		return nil
 	}
 
@@ -81,6 +112,10 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 			_, _ = client.Write([]byte(RES_ERR))
 			return err
 		}
+		historyRecords = append([]SeedLinkDataPacket(nil), historyRecords...)
+		sort.SliceStable(historyRecords, func(i, j int) bool {
+			return historyRecords[i].Timestamp < historyRecords[j].Timestamp
+		})
 	}
 
 	deliveryMutex.Lock()
@@ -89,6 +124,9 @@ func (e *END) Callback(client *SeedLinkClient, provider SeedLinkProvider, consum
 			break
 		}
 	}
+	sort.SliceStable(pending, func(i, j int) bool {
+		return pending[i].Timestamp < pending[j].Timestamp
+	})
 	for _, dataPacket := range pending {
 		if err != nil {
 			break

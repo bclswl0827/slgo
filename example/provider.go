@@ -88,12 +88,12 @@ func (p *provider) QueryHistory(startTime, endTime time.Time, channels []handler
 
 	dataPackets := make([]handlers.SeedLinkDataPacket, 0)
 
-	// Generate random data packets for each channel, every second
-	startTimestamp, endTimestamp := startTime.UnixMilli(), endTime.UnixMilli()
-	for i := startTimestamp; i < endTimestamp; i += 1000 {
+	// Generate full seconds; the server trims samples before the requested time.
+	firstRecord := startTime.Truncate(time.Second)
+	for recordTime := firstRecord; recordTime.Before(endTime); recordTime = recordTime.Add(time.Second) {
 		for _, channel := range channels {
 			dataPacket := handlers.SeedLinkDataPacket{
-				Timestamp:  i,
+				Timestamp:  recordTime.UnixMilli(),
 				SampleRate: SAMPLE_RATE,
 				Channel:    channel.ChannelName,
 				DataArr:    generateSineWave(SAMPLE_RATE),

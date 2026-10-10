@@ -22,17 +22,39 @@ func chunkInt32Slice(data []int32, chunkSize int) [][]int32 {
 }
 
 func SendSeedLinkPacket(station, location, network string, dataType int, sequence int64, data SeedLinkDataPacket) (newSequence int64, packetBuf []byte, err error) {
+	next, packet, _, err := sendSeedLinkPacketAt(station, location, network, dataType, sequence, data, time.UnixMilli(data.Timestamp).UTC())
+	return next, packet, err
+}
+
+// sampleTime keeps the sample index calculation consistent for packet writing
+// and for trimming overlapping records at a stream boundary.
+func sampleTime(start time.Time, sampleCount, sampleRate int) time.Time {
+	return start.Add(time.Duration(sampleCount/sampleRate)*time.Second +
+		time.Duration(sampleCount%sampleRate)*time.Second/time.Duration(sampleRate))
+}
+
+// MiniSEED fixed headers store time in 100-microsecond units. Round forward so
+// a later chunk cannot be encoded as starting before the preceding chunk ends.
+func miniSeedStartTime(t time.Time) time.Time {
+	start := t.Truncate(100 * time.Microsecond)
+	if start.Before(t) {
+		start = start.Add(100 * time.Microsecond)
+	}
+	return start
+}
+
+func sendSeedLinkPacketAt(station, location, network string, dataType int, sequence int64, data SeedLinkDataPacket, startTime time.Time) (newSequence int64, packetBuf []byte, endTime time.Time, err error) {
 	if sequence < 0 {
-		return sequence, nil, errors.New("sequence number must not be negative")
+		return sequence, nil, time.Time{}, errors.New("sequence number must not be negative")
 	}
 	if data.SampleRate <= 0 {
-		return sequence, nil, errors.New("sample rate must be greater than zero")
+		return sequence, nil, time.Time{}, errors.New("sample rate must be greater than zero")
 	}
 	if len(data.DataArr) == 0 {
-		return sequence, nil, errors.New("data packet contains no samples")
+		return sequence, nil, time.Time{}, errors.New("data packet contains no samples")
 	}
 	if data.Channel == "" {
-		return sequence, nil, errors.New("channel code is empty")
+		return sequence, nil, time.Time{}, errors.New("channel code is empty")
 	}
 
 	chunks := chunkInt32Slice(data.DataArr, CHUNK_SIZE)
@@ -43,9 +65,7 @@ func SendSeedLinkPacket(station, location, network string, dataType int, sequenc
 		var miniseed mseedio.MiniSeedData
 		miniseed.Init(dataType, mseedio.MSBFIRST)
 
-		sampleOffset := int64(i * CHUNK_SIZE)
-		timeOffset := time.Duration(sampleOffset * int64(time.Second) / int64(data.SampleRate))
-		startTime := time.UnixMilli(data.Timestamp).UTC().Add(timeOffset)
+		chunkStart := miniSeedStartTime(sampleTime(startTime, i*CHUNK_SIZE, data.SampleRate))
 		err := miniseed.Append(c, &mseedio.AppendOptions{
 			ChannelCode:    data.Channel,
 			StationCode:    station,
@@ -53,10 +73,10 @@ func SendSeedLinkPacket(station, location, network string, dataType int, sequenc
 			NetworkCode:    network,
 			SampleRate:     float64(data.SampleRate),
 			SequenceNumber: fmt.Sprintf("%06d", sequence%1000000),
-			StartTime:      startTime,
+			StartTime:      chunkStart,
 		})
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, time.Time{}, err
 		}
 
 		// Force 512-byte record
@@ -65,19 +85,20 @@ func SendSeedLinkPacket(station, location, network string, dataType int, sequenc
 		}
 		slData, err := miniseed.Encode(mseedio.OVERWRITE, mseedio.MSBFIRST)
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, time.Time{}, err
 		}
 
 		if len(slData) != 512 {
-			return sequence, nil, fmt.Errorf("encoded miniSEED record has length %d, want 512", len(slData))
+			return sequence, nil, time.Time{}, fmt.Errorf("encoded miniSEED record has length %d, want 512", len(slData))
 		}
 
 		slSeq := fmt.Sprintf("SL%06X", uint64(sequence)&0xFFFFFF)
 		buf.Write([]byte(slSeq))
 		buf.Write(slData)
 
+		endTime = sampleTime(chunkStart, len(c), data.SampleRate)
 		sequence++
 	}
 
-	return sequence, buf.Bytes(), nil
+	return sequence, buf.Bytes(), endTime, nil
 }
