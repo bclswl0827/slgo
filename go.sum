@@ -1,5 +1,5 @@
-github.com/bclswl0827/mseedio v1.2.1 h1:8VxTWJN8GFFZaIwBBvdvuUV6cm+zVjog6bMHaLQz0zE=
-github.com/bclswl0827/mseedio v1.2.1/go.mod h1:G9nOPR8epxb7ihX5pUpvs3HqYZMnMlXc1Ha1WSMWn7s=
+github.com/bclswl0827/mseedio v1.2.2 h1:beFcOfFmKQvwwRrzBnZQsYvQUmqfg4wM9oBYzls1LzY=
+github.com/bclswl0827/mseedio v1.2.2/go.mod h1:G9nOPR8epxb7ihX5pUpvs3HqYZMnMlXc1Ha1WSMWn7s=
 github.com/orcaman/concurrent-map/v2 v2.0.1 h1:jOJ5Pg2w1oeB6PeDurIYf6k9PQ+aTITr/6lP/L/zp6c=
 github.com/orcaman/concurrent-map/v2 v2.0.1/go.mod h1:9Eq3TG2oBe5FirmYWQfYO5iH1q0Jv47PLaNK++uCdOM=
 github.com/samber/lo v1.53.0 h1:t975lj2py4kJPQ6haz1QMgtId2gtmfktACxIXArw3HM=
